@@ -1,0 +1,96 @@
+# ==============================================================================
+# FastAPI / Python Core
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==============================================================================
+# Environment Variables & Secrets (CRITICAL)
+# ==============================================================================
+.env
+.env.[a-zA-TH-Z]*
+!.env.example
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# Databases (SQLite / Local storage)
+# ==============================================================================
+*.db
+*.sqlite
+*.sqlite3
+.env
+# ==============================================================================
+# Testing & Coverage
+# ==============================================================================
+htmlcov/
+.smoke_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.hypothesis/
+.pytest_cache/
+.pytest_cache/**/*
+backend/.env
+
+# ==============================================================================
+# Type Checking & Linters
+# ==============================================================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+.black
+.pre-commit-cache/
+
+# ==============================================================================
+# IDEs and Editors
+# ==============================================================================
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# IntelliJ / PyCharm
+.idea/
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+
+
+
+.env
+neo4j.txt
