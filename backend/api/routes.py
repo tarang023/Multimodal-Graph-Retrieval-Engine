@@ -8,7 +8,8 @@ import logging
 from services.ocr_pii_redactor import sanitize_and_save_ocr
 from services.gemini_extractor import extract_financial_data
 from services.qdrant_client import search_policy
-from services.neo4j_client import save_expense_to_graph
+from services.neo4j_client import save_expense_to_graph, get_budget_context
+from services.gemini import generate_financial_explanation
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -232,13 +233,28 @@ async def analyze_expense(request: AnalyzeRequest):
     
     retrieved_policies = search_policy(search_query)
     
-    logger.info(f"Retrieved {len(retrieved_policies)} policy chunks.")
+    # ── STEP 3: Retrieve budget/graph context from Neo4j ─────────────────────
+    logger.info(f"Retrieving budget context for employee: '{request.employee_id}'")
+    graph_context = {"budget": get_budget_context(request.employee_id)}
     
-    # ── STEP 3: Return collected context ──────────────────────────────────────
+    # ── STEP 4: Call Gemini for Reasoning ──────────────────────────────────────
+    try:
+        explanation = generate_financial_explanation(
+            question=request.question,
+            expense_json=expense_dict,
+            policy_context=retrieved_policies,
+            graph_context=graph_context
+        )
+    except Exception as e:
+        logger.error(f"Gemini reasoning failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI Reasoning failed: {str(e)}"
+        )
+    
+    # ── STEP 5: Return collected context & reasoning ──────────────────────────
+    logger.info("[ANALYZE] Pipeline finished successfully")
     return {
-        "message": "Data successfully processed and context retrieved.",
-        "neo4j_stored": graph_success,
-        "expense_data": expense_dict,
-        "retrieved_policies": retrieved_policies,
-        "question": request.question
+        "explanation": explanation,
+        "sources": retrieved_policies
     }

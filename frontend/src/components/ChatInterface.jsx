@@ -54,10 +54,10 @@ export default function ChatInterface({ documentData, isProcessing }) {
       if (!res.ok) throw new Error("Request failed");
       const data = await res.json();
       
-      // Since /analyze doesn't do the final Gemini reasoning yet, we just show what it retrieved.
-      let responseText = data.message || "Processed successfully.";
-      if (data.retrieved_policies && data.retrieved_policies.length > 0) {
-        responseText += "\n\n**Retrieved Policies:**\n- " + data.retrieved_policies.join("\n- ");
+      // /analyze now returns explanation and sources after Gemini reasoning
+      let responseText = data.explanation || "Processed successfully.";
+      if (data.sources && data.sources.length > 0) {
+        responseText += "\n\n**Sources Cited:**\n- " + data.sources.join("\n- ");
       }
       
       setMessages(prev => [...prev, { role: "assistant", content: responseText }]);
