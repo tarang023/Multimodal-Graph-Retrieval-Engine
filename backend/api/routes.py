@@ -158,6 +158,15 @@ async def upload_receipt(file: UploadFile = File(...)):
             )
 
         logger.info(f"  ✓ Extraction complete: {extracted_data}")
+        
+        # ── STEP 4: Save to Graph DB ─────────────────────────────────────────
+        logger.info(f"  [STEP 4] Saving extracted expense to Graph DB ...")
+        graph_success = save_expense_to_graph(user_id="anonymous", expense_data=extracted_data)
+        if graph_success:
+            logger.info("  ✓ Successfully saved expense to Graph DB.")
+        else:
+            logger.warning("  ✗ Failed to save expense to Graph DB.")
+
         logger.info("[UPLOAD] Pipeline finished successfully")
         logger.info("═" * 60)
 

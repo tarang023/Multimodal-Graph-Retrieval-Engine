@@ -8,6 +8,8 @@ export default function UploadZone({ onUploadStart, onUploadComplete }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
 
   const onDrop = useCallback(async (acceptedFiles) => {
     const selectedFile = acceptedFiles[0];
@@ -23,6 +25,8 @@ export default function UploadZone({ onUploadStart, onUploadComplete }) {
     }
 
     setUploading(true);
+    setErrorMsg(null);
+    setReceiptData(null);
     onUploadStart();
 
     const formData = new FormData();
@@ -33,21 +37,15 @@ export default function UploadZone({ onUploadStart, onUploadComplete }) {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) throw new Error("Upload failed (Status: " + res.status + ")");
       const data = await res.json();
-      // The API returns { message, raw_file, sanitized_file, data: { vendor, amount, ... } }
-      // We only want to pass the extracted data object to the UI
+      
+      setReceiptData(data.data);
       onUploadComplete(data.data);
     } catch (err) {
-      console.error("API error, using mock data for UI demo:", err);
-      // Fallback to mock data for presentation if backend is not running
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      onUploadComplete({
-        Vendor: "Acme Corp",
-        Amount: "$1,250.00",
-        Date: "2026-07-15",
-        Category: "Software Subscription"
-      });
+      console.error("API error:", err);
+      setErrorMsg("Error processing document. Please try again.");
+      onUploadComplete(null);
     } finally {
       setUploading(false);
     }
@@ -103,6 +101,8 @@ export default function UploadZone({ onUploadStart, onUploadComplete }) {
               onClick={() => {
                 setFile(null);
                 setPreview(null);
+                setReceiptData(null);
+                setErrorMsg(null);
                 onUploadComplete(null);
               }}
               className="text-sm text-slate-500 hover:text-slate-700"
@@ -111,7 +111,7 @@ export default function UploadZone({ onUploadStart, onUploadComplete }) {
             </button>
           </div>
           
-          <div className="flex-1 p-6 flex items-center justify-center bg-slate-100 relative">
+          <div className="flex-1 p-6 flex items-start justify-center bg-slate-100 relative overflow-y-auto">
             {uploading && (
               <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
                 <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
@@ -122,14 +122,103 @@ export default function UploadZone({ onUploadStart, onUploadComplete }) {
               </div>
             )}
             
-            {preview ? (
-              <img src={preview} alt="Document Preview" className="max-h-full max-w-full rounded shadow-sm object-contain" />
-            ) : (
-              <div className="flex flex-col items-center text-slate-400">
-                <FileText className="w-24 h-24 mb-4 opacity-50" />
-                <p>PDF Document Selected</p>
+            {errorMsg && (
+              <div className="absolute inset-0 bg-rose-50 flex flex-col items-center justify-center z-10 border border-rose-200">
+                <p className="text-rose-600 font-semibold">{errorMsg}</p>
+                <button 
+                  onClick={() => setErrorMsg(null)}
+                  className="mt-4 px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded transition-colors"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
+            
+            <div className="flex gap-6 w-full max-w-4xl h-full items-start">
+              {/* Left Column: Image Preview */}
+              <div className="flex-1 h-full flex flex-col justify-start">
+                {preview ? (
+                  <img src={preview} alt="Document Preview" className="max-w-full rounded shadow object-contain" />
+                ) : (
+                  <div className="flex flex-col items-center text-slate-400 justify-center h-full">
+                    <FileText className="w-24 h-24 mb-4 opacity-50" />
+                    <p>Document Selected</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Receipt Summary Card */}
+              {receiptData && (
+                <div className="flex-[1.2] bg-white rounded-xl shadow-lg border border-slate-200 p-6 flex flex-col max-h-full overflow-y-auto">
+                  <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Receipt Summary</h3>
+                  
+                  {/* Top Level Grid */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase font-semibold">Vendor</p>
+                      <p className="text-sm text-slate-900 font-medium">{receiptData.vendor || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase font-semibold">Total Amount</p>
+                      <p className="text-sm text-emerald-600 font-bold">{receiptData.currency} {receiptData.amount}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase font-semibold">Tax</p>
+                      <p className="text-sm text-slate-700">{receiptData.currency} {receiptData.tax_amount || "0.00"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase font-semibold">Date</p>
+                      <p className="text-sm text-slate-700">{receiptData.date || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase font-semibold">Category</p>
+                      <p className="text-sm text-slate-700">{receiptData.category || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase font-semibold">Type / Method</p>
+                      <p className="text-sm text-slate-700">
+                        {receiptData.document_type || "N/A"} • {receiptData.payment_method || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Line Items Table */}
+                  {receiptData.is_itemized && receiptData.line_items && receiptData.line_items.length > 0 && (
+                    <div className="mb-6">
+                      <p className="text-xs text-slate-400 uppercase font-semibold mb-2">Line Items</p>
+                      <div className="border border-slate-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                              <th className="py-2 px-3 text-slate-600 font-medium">Description</th>
+                              <th className="py-2 px-3 text-slate-600 font-medium text-right">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {receiptData.line_items.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="py-2 px-3 text-slate-800">{item.description}</td>
+                                <td className="py-2 px-3 text-slate-800 text-right font-medium">
+                                  {receiptData.currency} {item.amount}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Additional Notes */}
+                  {receiptData.additional_notes && (
+                    <div className="mt-auto bg-amber-50 rounded p-3 border border-amber-100">
+                      <p className="text-xs text-amber-700 uppercase font-semibold mb-1">Notes</p>
+                      <p className="text-sm text-amber-900 italic">{receiptData.additional_notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

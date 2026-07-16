@@ -55,23 +55,19 @@ export default function ChatInterface({ documentData, isProcessing }) {
       const data = await res.json();
       
       // /analyze now returns explanation and sources after Gemini reasoning
-      let responseText = data.explanation || "Processed successfully.";
-      if (data.sources && data.sources.length > 0) {
-        responseText += "\n\n**Sources Cited:**\n- " + data.sources.join("\n- ");
-      }
-      
-      setMessages(prev => [...prev, { role: "assistant", content: responseText }]);
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: data.explanation || "Processed successfully.",
+        sources: data.sources || []
+      }]);
       setIsLoading(false);
     } catch (err) {
       console.error("Chat API error:", err);
-      // Fallback for demo
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          role: "assistant", 
-          content: "I'm currently running in offline demo mode. If the backend at localhost:8000 was running, I would have answered: '" + userMessage + "'" 
-        }]);
-        setIsLoading(false);
-      }, 1000);
+      setMessages(prev => [...prev, { 
+        role: "error", 
+        content: "Error processing document. Please try again." 
+      }]);
+      setIsLoading(false);
     }
   };
 
@@ -126,7 +122,13 @@ export default function ChatInterface({ documentData, isProcessing }) {
             {Object.entries(documentData).map(([key, value]) => (
               <div key={key} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">{key}</p>
-                <p className="font-medium text-slate-800 truncate">{value}</p>
+                <p className="font-medium text-slate-800 truncate" title={typeof value === 'object' ? JSON.stringify(value) : String(value)}>
+                  {Array.isArray(value) 
+                    ? `[${value.length} items]` 
+                    : typeof value === 'object' && value !== null 
+                      ? JSON.stringify(value) 
+                      : String(value)}
+                </p>
               </div>
             ))}
           </div>
@@ -138,7 +140,7 @@ export default function ChatInterface({ documentData, isProcessing }) {
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex gap-3 max-w-[85%] ${msg.role === "user" ? "ml-auto flex-row-reverse" : ""}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-              msg.role === "user" ? "bg-blue-600" : "bg-emerald-500"
+              msg.role === "user" ? "bg-blue-600" : msg.role === "error" ? "bg-rose-500" : "bg-emerald-500"
             }`}>
               {msg.role === "user" ? (
                 <User className="w-5 h-5 text-white" />
@@ -149,9 +151,30 @@ export default function ChatInterface({ documentData, isProcessing }) {
             <div className={`p-3 rounded-2xl ${
               msg.role === "user" 
                 ? "bg-blue-600 text-white rounded-tr-sm" 
-                : "bg-white border border-slate-200 text-slate-700 rounded-tl-sm shadow-sm"
+                : msg.role === "error"
+                  ? "bg-rose-50 border border-rose-200 text-rose-700 rounded-tl-sm shadow-sm"
+                  : "bg-white border border-slate-200 text-slate-700 rounded-tl-sm shadow-sm"
             }`}>
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              
+              {/* Stylized Sources Cited Dropdown */}
+              {msg.sources && msg.sources.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <details className="group">
+                    <summary className="text-xs font-semibold text-slate-400 cursor-pointer list-none flex items-center gap-1 hover:text-slate-600 transition-colors select-none">
+                      <ChevronDown className="w-3 h-3 group-open:rotate-180 transition-transform" />
+                      Sources Cited ({msg.sources.length})
+                    </summary>
+                    <ul className="mt-2 space-y-2 pl-2">
+                      {msg.sources.map((src, i) => (
+                        <li key={i} className="text-[11px] leading-relaxed text-slate-500 italic bg-slate-50 p-2.5 rounded border border-slate-100">
+                          "{src}"
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+              )}
             </div>
           </div>
         ))}
