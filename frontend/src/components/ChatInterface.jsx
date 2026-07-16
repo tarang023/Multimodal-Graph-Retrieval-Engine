@@ -39,18 +39,28 @@ export default function ChatInterface({ documentData, isProcessing }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/ask", {
+      const res = await fetch("http://localhost:8000/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ question: userMessage }),
+        body: JSON.stringify({
+          question: userMessage,
+          expense_data: documentData ?? {},   // Must match AnalyzeRequest.expense_data
+          employee_id: "EMP-001",             // TODO: replace with real auth user id
+        }),
       });
       
       if (!res.ok) throw new Error("Request failed");
       const data = await res.json();
       
-      setMessages(prev => [...prev, { role: "assistant", content: data.answer || "I processed your request successfully." }]);
+      // Since /analyze doesn't do the final Gemini reasoning yet, we just show what it retrieved.
+      let responseText = data.message || "Processed successfully.";
+      if (data.retrieved_policies && data.retrieved_policies.length > 0) {
+        responseText += "\n\n**Retrieved Policies:**\n- " + data.retrieved_policies.join("\n- ");
+      }
+      
+      setMessages(prev => [...prev, { role: "assistant", content: responseText }]);
       setIsLoading(false);
     } catch (err) {
       console.error("Chat API error:", err);

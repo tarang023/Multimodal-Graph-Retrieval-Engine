@@ -35,7 +35,9 @@ export default function UploadZone({ onUploadStart, onUploadComplete }) {
       });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
-      onUploadComplete(data);
+      // The API returns { message, raw_file, sanitized_file, data: { vendor, amount, ... } }
+      // We only want to pass the extracted data object to the UI
+      onUploadComplete(data.data);
     } catch (err) {
       console.error("API error, using mock data for UI demo:", err);
       // Fallback to mock data for presentation if backend is not running
