@@ -35,23 +35,47 @@ _RESPONSE_SCHEMA = {
     "properties": {
         "vendor":   {"type": "string"},
         "amount":   {"type": "number"},
+        "tax_amount": {"type": "number"},
         "date":     {"type": "string"},
         "category": {"type": "string"},
+        "document_type": {"type": "string"},
+        "payment_method": {"type": "string"},
+        "is_itemized": {"type": "boolean"},
+        "currency": {"type": "string"},
+        "merchant_location": {"type": "string"},
+        "additional_notes": {"type": "string"},
+        "line_items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string"},
+                    "amount": {"type": "number"}
+                },
+                "required": ["description", "amount"]
+            }
+        }
     },
-    "required": ["vendor", "amount", "date", "category"],
+    "required": ["vendor", "amount", "date", "category", "document_type", "is_itemized", "currency"]
 }
 
 _EXTRACTION_PROMPT = (
     "You are a financial-document OCR assistant. "
     "Carefully read the attached receipt or financial document image and extract "
-    "the following four fields:\n"
-    "  • vendor   – the name of the merchant or vendor\n"
-    "  • amount   – the total transaction amount as a decimal number (no currency symbol)\n"
-    "  • date     – the transaction date in ISO-8601 format (YYYY-MM-DD) if possible\n"
-    "  • category – the most appropriate expense category "
-    "(e.g. 'Food & Dining', 'Travel', 'Office Supplies', 'Accommodation', 'Fuel', etc.)\n\n"
-    "Return ONLY a valid JSON object with exactly these four keys. "
-    "Do not include explanations, markdown fences, or any extra text."
+    "the required fields:\n"
+    "  • vendor: the name of the merchant or vendor\n"
+    "  • amount: the total transaction amount as a decimal number\n"
+    "  • tax_amount: the total tax amount if visible\n"
+    "  • date: the transaction date in ISO-8601 format (YYYY-MM-DD)\n"
+    "  • category: the most appropriate expense category\n"
+    "  • document_type: explicitly identify if it's 'itemized_receipt' or 'credit_card_statement'\n"
+    "  • payment_method: e.g. Visa, Cash, Apple Pay\n"
+    "  • is_itemized: true if there are distinct items purchased\n"
+    "  • currency: e.g. USD, EUR, GBP\n"
+    "  • merchant_location: city or full address if visible\n"
+    "  • additional_notes: catch-all for extra context like exchange rates or fees\n"
+    "  • line_items: array of objects with description (string) and amount (number) if is_itemized is true\n\n"
+    "Return ONLY a valid JSON object matching the exact schema."
 )
 
 
@@ -120,8 +144,21 @@ def extract_financial_data(image_path: str) -> Optional[Dict[str, Any]]:
         extracted: Dict[str, Any] = {
             "vendor":   str(raw.get("vendor", "Unknown")),
             "amount":   float(raw.get("amount") or 0.0),
+            "tax_amount": float(raw.get("tax_amount") or 0.0),
             "date":     str(raw.get("date", "")),
             "category": str(raw.get("category", "Uncategorised")),
+            "document_type": str(raw.get("document_type", "unknown")),
+            "payment_method": str(raw.get("payment_method", "unknown")),
+            "is_itemized": bool(raw.get("is_itemized", False)),
+            "currency": str(raw.get("currency", "")),
+            "merchant_location": str(raw.get("merchant_location", "")),
+            "additional_notes": str(raw.get("additional_notes", "")),
+            "line_items": [
+                {
+                    "description": str(item.get("description", "")),
+                    "amount": float(item.get("amount") or 0.0)
+                } for item in raw.get("line_items", []) if isinstance(item, dict)
+            ]
         }
 
         logger.info(f"  ✓ Parsed result : {extracted}")

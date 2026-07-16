@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body
-from pydantic import BaseModel, Field
-from typing import Optional, Any, Dict
+from pydantic import BaseModel,Field
+from typing import Optional, Any, Dict, List
 import shutil
 import os
 import logging
@@ -11,12 +11,13 @@ from services.qdrant_client import search_policy
 from services.neo4j_client import save_expense_to_graph, get_budget_context
 from services.gemini import generate_financial_explanation
 
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ── Storage directories ───────────────────────────────────────────────────────
-RAW_DIR       = os.path.join("uploads", "raw")        # uploads/raw/
-SANITIZED_DIR = os.path.join("uploads", "sanitized")  # uploads/sanitized/
+RAW_DIR       = os.path.join("uploads", "raw")         
+SANITIZED_DIR = os.path.join("uploads", "sanitized")  
 
 os.makedirs(RAW_DIR,       exist_ok=True)
 os.makedirs(SANITIZED_DIR, exist_ok=True)
@@ -24,12 +25,24 @@ os.makedirs(SANITIZED_DIR, exist_ok=True)
 
 # ── Request / Response models ─────────────────────────────────────────────────
 
+class LineItem(BaseModel):
+    description: str = Field(default="", description="Description of the item")
+    amount: float = Field(default=0.0, description="Amount of the line item")
+
 class ReceiptData(BaseModel):
     """Mirrors the schema returned by /upload so the frontend can pass it back."""
     vendor:   str   = Field(default="", description="Merchant / vendor name")
     amount:   float = Field(default=0.0, description="Total transaction amount")
+    tax_amount: float = Field(default=0.0, description="Total tax amount")
     date:     str   = Field(default="",  description="Transaction date (ISO-8601)")
     category: str   = Field(default="",  description="Expense category")
+    document_type: str = Field(default="", description="Either 'itemized_receipt' or 'credit_card_statement'")
+    payment_method: str = Field(default="", description="Payment method used")
+    is_itemized: bool = Field(default=False, description="Whether the receipt has line items")
+    currency: str = Field(default="", description="Currency of the transaction")
+    merchant_location: str = Field(default="", description="Location of the merchant")
+    additional_notes: str = Field(default="", description="Extra context like exchange rates or fees")
+    line_items: List[LineItem] = Field(default_factory=list, description="List of line items")
 
 
 class AskRequest(BaseModel):
@@ -77,9 +90,9 @@ async def upload_receipt(file: UploadFile = File(...)):
     logger.info(f"  content_type : {file.content_type}")
     logger.info(f"  size (header): {file.size}")
 
-    # ── MIME validation ───────────────────────────────────────────────────────
+  
     if file.content_type not in allowed_image_types and file.content_type != "application/pdf":
-        logger.warning(f"  ✗ Rejected — unsupported content type: '{file.content_type}'")
+        logger.warning(f"Rejected — unsupported content type: '{file.content_type}'")
         raise HTTPException(
             status_code=400,
             detail=(
@@ -90,22 +103,22 @@ async def upload_receipt(file: UploadFile = File(...)):
 
     original_filename = file.filename or "upload"
 
-    # ── STEP 1: Save raw upload → uploads/raw/ ────────────────────────────────
+   
     raw_filename = f"raw_{original_filename}"
     raw_path     = os.path.join(RAW_DIR, raw_filename)
-    logger.info(f"  [STEP 1] Saving raw file → {raw_path}")
+    logger.info(f"[step 1]  :  Saving raw file → {raw_path}")
 
     with open(raw_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     saved_size = os.path.getsize(raw_path)
-    logger.info(f"  ✓ Raw file saved — {saved_size} bytes at '{raw_path}'")
+    logger.info(f"Raw file saved — {saved_size} bytes at '{raw_path}'")
 
     if saved_size == 0:
-        logger.error("  ✗ Raw file is 0 bytes — aborting pipeline.")
+        logger.error("Raw file is 0 bytes — aborting pipeline.")
         raise HTTPException(status_code=400, detail="Uploaded file appears to be empty.")
 
-    # ── Image processing branch ───────────────────────────────────────────────
+   
     if file.content_type in allowed_image_types:
         sanitized_filename = f"sanitized_{original_filename}"
         sanitized_path     = os.path.join(SANITIZED_DIR, sanitized_filename)
@@ -155,62 +168,12 @@ async def upload_receipt(file: UploadFile = File(...)):
             "data":           extracted_data,
         }
 
-    # ── PDF branch (stub — future work) ──────────────────────────────────────
-    logger.info("  PDF detected — extraction not yet implemented.")
-    return {
-        "message":        "PDF uploaded. Text extraction not yet implemented.",
-        "raw_file":       f"uploads/raw/{raw_filename}",
-        "sanitized_file": None,
-        "data":           None,
-    }
-
-
-@router.post("/ask", summary="Ask the AI assistant a question about an expense")
-async def ask_assistant(request: AskRequest):
-    """
-    Accepts structured receipt data + a natural-language question and returns
-    a reasoning response.
-
-    Send a JSON body:
-    ```json
-    {
-        "receipt_data": {
-            "vendor": "Starbucks",
-            "amount": 5.50,
-            "date": "2024-01-10",
-            "category": "Food & Dining"
-        },
-        "question": "Is this expense reimbursable?",
-        "employee_id": "EMP-001"
-    }
-    ```
-    Make sure the request Content-Type header is **application/json**.
-    """
-    # TODO: budget_context  = get_budget_context(request.employee_id)
-    # TODO: policy_context  = get_policy_context(request.receipt_data.category)
-    # TODO: answer = reason_about_expense(
-    #     request.receipt_data.model_dump(), budget_context, policy_context, request.question
-    # )
-
-    # ── Stub response (replace with Gemini reasoning call) ───────────────────
-    receipt = request.receipt_data
-    answer = (
-        f"The expense of ${receipt.amount:.2f} at '{receipt.vendor}' "
-        f"on {receipt.date or 'unknown date'} "
-        f"(category: {receipt.category or 'unspecified'}) "
-        "appears to be within budget and complies with company policy. "
-        f"[Employee: {request.employee_id}]"
-    )
-
-    return {
-        "answer":      answer,
-        "receipt_data": receipt.model_dump(),
-        "question":    request.question,
-    }
+  
 
 
 @router.post("/analyze", summary="Save expense and retrieve policies for reasoning")
 async def analyze_expense(request: AnalyzeRequest):
+    
     """
     Orchestrates the Graph DB and Vector DB integration:
     1. Saves the structured expense to Neo4j.
