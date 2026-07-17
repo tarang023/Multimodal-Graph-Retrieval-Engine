@@ -7,20 +7,20 @@ from google import genai
 
 logger = logging.getLogger(__name__)
 
-# ── Qdrant Configuration ───────────────────────────────────────────────────────
+ 
 QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "expense_policies"
 EMBEDDING_MODEL = "gemini-embedding-2"
 VECTOR_SIZE = 3072  # gemini-embedding-2 outputs 3072-dimensional vectors
 
-# Initialize Qdrant Client (connects to running server)
+
 try:
     client = QdrantClient(url=QDRANT_URL)
 except Exception as e:
     logger.error(f"Failed to initialize QdrantClient: {e}")
     client = None
 
-# Initialize Google GenAI Client
+
 _api_key = os.environ.get("GEMINI_API_KEY", "")
 if _api_key:
     genai_client = genai.Client(api_key=_api_key)
@@ -29,7 +29,7 @@ else:
     logger.warning("GEMINI_API_KEY not set. Qdrant RAG will fail.")
 
 def _get_embedding(text: str) -> list[float]:
-    """Helper to get embeddings from Gemini."""
+    
     if not genai_client:
         raise ValueError("GEMINI_API_KEY is missing.")
     
@@ -40,17 +40,15 @@ def _get_embedding(text: str) -> list[float]:
     return response.embeddings[0].values
 
 def initialize_policies(policy_text: str) -> None:
-    """
-    Chunks a document and stores it in a Qdrant collection named expense_policies.
-    Uses Gemini text-embedding-004 for vectorization.
-    """
+    
+
     if not client:
         logger.error("QdrantClient not initialized.")
         return
 
     logger.info("Initializing policies in Qdrant...")
     
-    # Recreate the collection to ensure vector dimensions match
+  
     if client.collection_exists(COLLECTION_NAME):
         client.delete_collection(COLLECTION_NAME)
         

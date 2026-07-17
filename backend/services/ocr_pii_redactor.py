@@ -6,9 +6,7 @@ import logging
 import traceback
 
 logger = logging.getLogger(__name__)
-
-# Initialize the EasyOCR reader ONCE globally so it doesn't reload the AI model every time
-# gpu=False ensures it runs smoothly on any CPU without needing an Nvidia graphics card
+ 
 logger.info("Initializing EasyOCR Deep Learning Model...")
 reader = easyocr.Reader(['en'], gpu=False)
 
@@ -45,24 +43,24 @@ def sanitize_and_save_ocr(input_path: str, output_dir: str) -> str:
             return ""
             
         logger.info("  [2/3] Running EasyOCR Deep Learning Inference ...")
-        # EasyOCR returns a list of tuples: (bounding_box, text, confidence_score)
+        
         results = reader.readtext(img)
         
         redacted_count = 0
         REDACT_COLOR = (30, 30, 30) # Dark charcoal
         
-        # ── INDUSTRY STANDARD PII REGEX PATTERNS ──
+        
         pii_patterns = [
-            # 1. Standard 16-digit Credit Cards (e.g., 1234-5678-9012-3456 or 1234 5678 9012 3456)
+            # 16-digit Credit Cards 
             re.compile(r'\b(?:\d{4}[ -]?){3}\d{4}\b'),
             
-            # 2. Fully Obfuscated Cards (e.g., **** **** **** 1234)
+            # Fully Obfuscated Cards **** **** **** 1234 
             re.compile(r'\b(?:\*{4}[ -]?){3}\d{4}\b'),
             
-            # 3. Long Bank Account Numbers (13 to 19 continuous digits)
+            # 3. Bank Account Numbers  
             re.compile(r'\b\d{13,19}\b'),
             
-            # 4. US Social Security Numbers (e.g., 123-45-6789)
+            # 4.  Social Security Numbers 123-45-6789
             re.compile(r'\b\d{3}[- ]?\d{2}[- ]?\d{4}\b')
         ]
         

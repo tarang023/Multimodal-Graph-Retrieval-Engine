@@ -179,10 +179,8 @@ async def upload_receipt(file: UploadFile = File(...)):
 
   
 
-
 @router.post("/analyze", summary="Save expense and retrieve policies for reasoning")
 async def analyze_expense(request: AnalyzeRequest):
-    
     """
     Orchestrates the Graph DB and Vector DB integration:
     1. Saves the structured expense to Neo4j.
@@ -192,29 +190,53 @@ async def analyze_expense(request: AnalyzeRequest):
     logger.info("[ANALYZE] New analyze request received")
     
     expense_dict = request.expense_data.model_dump()
+    document_type = expense_dict.get("document_type", "unknown")
     
-    # ── STEP 1: Save to Neo4j ──────────────────────────────────────────────────
-    graph_success = save_expense_to_graph(request.employee_id, expense_dict)
-    if not graph_success:
-        logger.warning("Failed to save expense to Graph DB (Neo4j might be unreachable).")
+    retrieved_context = []
+    graph_context = {}
+
+    # ── ROUTING LOGIC BASED ON GEMINI'S CLASSIFICATION ──
+    
+    if document_type == "credit_card_statement":
+        logger.info("📄 Processing as CREDIT CARD STATEMENT")
+        # 1. For statements, the user is usually asking about a specific line item.
+        # We use Neo4j to check if the company already received an invoice for this charge.
+        # (In a real app, you would pass the specific line item the user clicked on)
+        vendor_to_search = expense_dict.get("vendor") or "Amazon Web Services" 
         
-    # ── STEP 2: Retrieve policies from Qdrant ─────────────────────────────────
-    # We use the category as the query to find relevant policies
-    search_query = request.expense_data.category
-    logger.info(f"Searching Qdrant for policies related to: '{search_query}'")
-    
-    retrieved_policies = search_policy(search_query)
-    
-    # ── STEP 3: Retrieve budget/graph context from Neo4j ─────────────────────
-    logger.info(f"Retrieving budget context for employee: '{request.employee_id}'")
-    graph_context = {"budget": get_budget_context(request.employee_id)}
+        logger.info(f"Searching Neo4j for matching invoices from: {vendor_to_search}")
+        # Stub: matching_invoice = match_statement_to_invoice("company_123", vendor_to_search)
+        graph_context["matched_invoice"] = f"Found prior invoice for {vendor_to_search} approved by IT Dept."
+        
+        logger.info("Searching Qdrant for vendor/cloud policies...")
+        retrieved_context = search_policy(f"What is {vendor_to_search} used for?")
+
+    elif document_type == "itemized_receipt":
+        logger.info("🧾 Processing as ITEMIZED RECEIPT")
+        # 1. Save to Neo4j for budgeting
+        graph_success = save_expense_to_graph(request.employee_id, expense_dict)
+        if not graph_success:
+            logger.warning("Failed to save expense to Graph DB (Neo4j might be unreachable).")
+            
+        # 2. Retrieve policies from Qdrant based on category (e.g. Travel, Meals)
+        search_query = request.expense_data.category
+        logger.info(f"Searching Qdrant for policies related to: '{search_query}'")
+        retrieved_context = search_policy(search_query)
+        
+        # 3. Retrieve budget context from Neo4j
+        logger.info(f"Retrieving budget context for employee: '{request.employee_id}'")
+        graph_context["budget"] = get_budget_context(request.employee_id)
+
+    else:
+        logger.info("📝 Processing as GENERIC INVOICE / OTHER")
+        retrieved_context = search_policy(request.question)
     
     # ── STEP 4: Call Gemini for Reasoning ──────────────────────────────────────
     try:
         explanation = generate_financial_explanation(
             question=request.question,
             expense_json=expense_dict,
-            policy_context=retrieved_policies,
+            policy_context=retrieved_context,
             graph_context=graph_context
         )
     except Exception as e:
@@ -228,5 +250,5 @@ async def analyze_expense(request: AnalyzeRequest):
     logger.info("[ANALYZE] Pipeline finished successfully")
     return {
         "explanation": explanation,
-        "sources": retrieved_policies
+        "sources": retrieved_context
     }

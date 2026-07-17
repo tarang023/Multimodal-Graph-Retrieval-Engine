@@ -15,9 +15,7 @@ else:
     logger.warning("GEMINI_API_KEY not set. Gemini API calls will fail.")
 
 def generate_financial_explanation(question: str, expense_json: dict, policy_context: list, graph_context: dict) -> str:
-    """
-    Uses Gemini to reason about an expense given budget and policy context.
-    """
+   
     if not client:
         raise ValueError("GEMINI_API_KEY is not configured.")
 

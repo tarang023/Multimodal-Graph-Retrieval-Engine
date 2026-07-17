@@ -5,7 +5,7 @@ from neo4j import GraphDatabase
 
 logger = logging.getLogger(__name__)
 
-URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+URI = os.getenv("NEO4J_URI")
 USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
 PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
 
@@ -14,6 +14,7 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize Neo4j driver: {e}")
     driver = None
+    
 
 def save_expense_to_graph(user_id: str, expense_data: dict) -> bool:
     """
@@ -111,11 +112,7 @@ def save_expense_to_graph(user_id: str, expense_data: dict) -> bool:
         return False
 
 def get_budget_context(employee_id: str) -> str:
-    """
-    Queries Neo4j for the employee's budget information.
-    Aggregates expenses per category and calculates remaining budget 
-    against a static $1000 limit.
-    """
+    
     if not driver:
         return "Neo4j driver not initialized. Cannot retrieve budget context."
         
@@ -127,6 +124,7 @@ def get_budget_context(employee_id: str) -> str:
     """
     
     try:
+        # for now it is fixed
         budget_limit = 1000.0
         context_lines = [f"Budget context for employee {employee_id}:", f"Total budget limit per category: ${budget_limit:.2f}"]
         
